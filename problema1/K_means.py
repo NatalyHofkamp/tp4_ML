@@ -1,11 +1,5 @@
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-
-def get_data(filename):
-    data = pd.read_csv(filename)
-    return data.iloc[:, 1:].values  # Convertir a numpy array
 
 class K_means: 
     def __init__(self, k=2, tolerance=0.001, max_iter=500):
@@ -55,24 +49,36 @@ class K_means:
                 break
         return self.clusters, self.centroids
 
+
 def plot_clusters(all_clusters):
-    # Lista de colores ampliada
-    colors = list(mcolors.TABLEAU_COLORS.values()) + list(mcolors.CSS4_COLORS.values())
-    plt.figure(figsize=(12, 10))
+    colors = plt.get_cmap('tab20').colors
     
-    for k, clusters_data in all_clusters.items():
+    num_k = len(all_clusters)
+    cols = 4
+    rows = int(np.ceil(num_k / cols))
+    
+    fig, axes = plt.subplots(1, cols, figsize=(20, 5))
+    axes = axes.flatten()  
+    for idx, (k, clusters_data) in enumerate(all_clusters.items()):
+        ax = axes[idx % cols]
         clusters, centroids = clusters_data['clusters'], clusters_data['centroids']
+        
         for cluster in clusters:
             cluster_data = np.array(clusters[cluster])
             color = colors[cluster % len(colors)]
-            plt.scatter(cluster_data[:, 0], cluster_data[:, 1], color=color, label=f'Cluster {cluster} for K={k}', alpha=0.6)
-            plt.scatter(centroids[cluster][0], centroids[cluster][1], color='k', marker='x', s=100, linewidths=3)
-    
-    plt.xlabel('Feature 1')
-    plt.ylabel('Feature 2')
-    plt.legend()
-    plt.title(f'Cluster Assignments and Centroids for K={k}')
-    plt.show()
+            ax.scatter(cluster_data[:, 0], cluster_data[:, 1], color=color,  alpha=0.6)
+            ax.scatter(centroids[cluster][0], centroids[cluster][1], color='k', marker='x', s=100, linewidths=3)
+        
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_title(f'K={k}', fontsize=12)
+        
+        if (idx + 1) % cols == 0 or idx == num_k - 1:
+            plt.tight_layout()
+            plt.show()
+            if idx != num_k - 1:
+                fig, axes = plt.subplots(1, cols, figsize=(20, 5))
+                axes = axes.flatten()
 
 def best_K(K_values, inertia_values):
     plt.plot(K_values, inertia_values, marker='o')
@@ -80,27 +86,3 @@ def best_K(K_values, inertia_values):
     plt.ylabel('Inertia')
     plt.title('Elbow Method For Optimal K')
     plt.show()
-
-def main():
-    data = get_data('problema1/clustering.csv')
-    tolerance = 0.001
-    max_iter = 20
-    inertia_values = []
-    K_values = range(2,10)
-    models = {}
-
-    for k in K_values:
-        model = K_means(k, tolerance, max_iter)
-        clusters, centroids = model.set_clusters(data)
-        inertia = model.inertia(data)
-        models[k] = {'clusters': clusters, 'centroids': centroids, 'inertia': inertia}
-        inertia_values.append(inertia)
-
-    best_K(K_values, inertia_values)
-
-    # Graficar clusters para cada K
-    for k in K_values:
-        plot_clusters(k, models[k]['clusters'], models[k]['centroids'], data)
-
-if __name__ == '__main__':
-    main()
