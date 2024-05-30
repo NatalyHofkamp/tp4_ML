@@ -1,94 +1,118 @@
 import numpy as np
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
 from K_means import K_means  # Asegúrate de que K_means esté correctamente implementado e importado
 from dataset import get_data  # Asegúrate de que get_data esté correctamente implementado e importado
+from scipy.stats import multivariate_normal
 
 class GMM:
-    def __init__(self, k, max_iter=5):
+    def __init__(self, k, max_iter=50):
         self.k = k
         self.max_iter = int(max_iter)
-
+    
     def initialize(self, X):
-        self.shape = X.shape
-        self.n, self.m = self.shape
-        # Inicialización usando K-means
-        kmeans = K_means(self.k)
-        clusters, centroids = kmeans.set_clusters(X)
+        self.n, self.m = X.shape
+        # Encontrar los clusters y centroides usando K-means
+        kmeans = K_means(self.k,0.001,20)
+        self.clusters, self.centroids = kmeans.set_clusters(X)
 
-        self.mu = centroids
-        self.phi = np.array([np.sum(clusters == i) for i in range(self.k)]) / self.n
-        self.sigma = [np.cov(X[clusters == i].T) for i in range(self.k)]
-        self.weights = np.full((self.n, self.k), fill_value=1/self.k)
-
+        # La media de cada gaussiana son los centroides de k-means
+        self.mu = self.centroids
+        # La probabilidad de cada gaussiana (normalizada)
+        self.pi = np.array([len(self.clusters[i]) for i in range(self.k)]) / len(X)
+        # La matriz de covarianza de cada gaussiana
+        self.sigma = [np.cov(np.array(self.clusters[i]).T) if len(self.clusters[i]) > 0 else np.eye(self.m) for i in range(self.k)]
+        
     def E_step(self, X):
-        self.weights = self.predict_proba(X)
-        self.phi = self.weights.mean(axis=0)
+        N = len(X)
+        responsibilities = np.zeros((N, self.k))
+        for point in range(N):
+            for cluster in range(self.k):
+                if self.sigma[cluster].ndim == 0:  # Check if sigma is correctly initialized
+                    raise ValueError(f"Sigma for cluster {cluster} is not properly initialized.")
+                responsibilities[point, cluster] = self.pi[cluster] * multivariate_normal.pdf(X[point], self.mu[cluster], self.sigma[cluster])
+            if np.sum(responsibilities[point, :]) != 0:
+                responsibilities[point, :] /= np.sum(responsibilities[point, :])
+            else:
+                responsibilities[point, :] = 1 / self.k
+        return responsibilities
 
     def M_step(self, X):
-        for i in range(self.k):
-            weight = self.weights[:, [i]]
-            total_weight = weight.sum()
-            self.mu[i] = (X * weight).sum(axis=0) / total_weight
-            self.sigma[i] = np.cov(X.T, aweights=(weight / total_weight).flatten(), bias=True)
+        new_mu = np.zeros((self.k, self.m))
+        new_sigma = np.zeros((self.k, self.m, self.m))
+        new_pi = np.zeros(self.k)
+        for k in range(self.k):
+            Nk = np.sum(self.responsibilities[:, k], axis=0)
+            new_mu[k] = np.sum(self.responsibilities[:, k][:, np.newaxis] * X, axis=0) / Nk
+            diff = X - new_mu[k]
+            new_sigma[k] = np.dot(self.responsibilities[:, k] * diff.T, diff) / Nk
+            new_pi[k] = Nk / len(X)
+        return new_mu, new_sigma, new_pi
 
-    def multivariate_gaussian(self, X, mean, cov):
-        n = X.shape[1]
-        diff = X - mean
-        exp_term = np.exp(-0.5 * np.einsum('ij,ij->i', np.dot(diff, np.linalg.inv(cov)), diff))
-        norm_term = np.sqrt((2 * np.pi) ** n * np.linalg.det(cov))
-        return exp_term / norm_term
+    def check_loglikelihood(self, X, log_likelihoods, tol):
+        log_likelihood = np.sum(np.log(np.sum([self.pi[k] * multivariate_normal.pdf(X, self.mu[k], self.sigma[k]) for k in range(self.k)], axis=0)))
+        log_likelihoods.append(log_likelihood)
+        if len(log_likelihoods) > 1 and abs(log_likelihood - log_likelihoods[-2]) < tol:
+            return True
+        return False
 
-    def predict_proba(self, X):
-        likelihood = np.zeros((self.n, self.k))
-        for i in range(self.k):
-            likelihood[:, i] = self.multivariate_gaussian(X, self.mu[i], self.sigma[i])
+    def Train(self, X, max_iters=100, tol=1e-3):
+        self.initialize(X)
+        log_likelihoods = []
+        for _ in range(max_iters):
+            self.responsibilities = self.E_step(X)
+            self.mu, self.sigma, self.pi = self.M_step(X)
+            if self.check_loglikelihood(X, log_likelihoods, tol):
+                break
+        return log_likelihoods
+    
+    def set_clusters(self, X):
+        cluster_assignments = np.argmax(self.responsibilities, axis=1)
+        clusters = {i: [] for i in range(self.k)}
+        for idx, cluster in enumerate(cluster_assignments):
+            clusters[cluster].append(X[idx])
+        return clusters
+        
+def plot_clusters_and_gaussians(X, clusters, mu, sigma, ax):
+    colors = plt.get_cmap('tab20').colors
+    for cluster_idx, points in clusters.items():
+        points = np.array(points)
+        ax.scatter(points[:, 0], points[:, 1], color=colors[cluster_idx % len(colors)], label=f'Cluster {cluster_idx}')
+    
+    x_min, x_max = np.min(X[:, 0]) - 1, np.max(X[:, 0]) + 1
+    y_min, y_max = np.min(X[:, 1]) - 1, np.max(X[:, 1]) + 1
+    
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100), np.linspace(y_min, y_max, 100))
+    pos = np.dstack((xx, yy))
+    
+    for k in range(len(mu)):
+        rv = multivariate_normal(mu[k], sigma[k])
+        ax.contour(xx, yy, rv.pdf(pos), levels=10, colors=[colors[k % len(colors)]], alpha=0.5)
 
-        numerator = likelihood * self.phi
-        denominator = numerator.sum(axis=1)[:, np.newaxis]
-        weights = numerator / denominator
-        return weights
+    ax.legend()
 
-    def predict(self, X):
-        weights = self.predict_proba(X)
-        return np.argmax(weights, axis=1)
-
-    def inertia(self, X):
-        inertia = 0
-        for i in range(self.n):
-            distances = np.linalg.norm(X[i] - self.mu, axis=1)
-            nearest_centroid_index = np.argmin(distances)
-            inertia += distances[nearest_centroid_index] ** 2
-        return inertia
-
-def plot_elbow(inertia_values, K_values):
-    plt.plot(K_values, inertia_values, marker='o')
-    plt.xlabel('Número de clusters (K)')
-    plt.ylabel('Inercia')
-    plt.title('Método del codo para K óptimo')
+def plot_models(model, data, k):
+    fig, ax = plt.subplots(figsize=(10, 8))
+    clusters, mu, sigma = model
+    plot_clusters_and_gaussians(data, clusters, mu, sigma, ax)
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.legend()
+    ax.set_title(f'Gaussian Mixture Model with {k} Clusters')
     plt.show()
 
-def main():
-    max_K = 15  # Definir el máximo valor de K a probar
-    max_iter = 50
-    data = get_data('problema1/clustering.csv')
-    model = GMM(2, max_iter)  # Inicializar el modelo con K=1
+    
+def calculate_inertia(clusters):
+    inertia = 0
+    for cluster_idx, points in clusters.items():
+        center = np.mean(points, axis=0)
+        inertia += np.sum(np.linalg.norm(points - center)** 2)
+    return inertia
 
-    inertia_values = []
-
-    for k in range(1, max_K + 1):
-        model.k = k
-        model.initialize(data)
-
-        for _ in range(max_iter):
-            model.E_step(data)
-            model.M_step(data)
-
-        inertia = model.inertia(data)
-        inertia_values.append(inertia)
-
-    K_values = range(1, max_K + 1)  # Número de clusters es el rango de K
-    plot_elbow(inertia_values, K_values)
-
-
-if __name__ == "__main__":
-    main()
+def GMM_inertia(inertias):
+    k_values, iner = zip(*inertias.items())
+    plt.plot(k_values, iner, marker='o')
+    plt.xlabel('Number of clusters (k)')
+    plt.ylabel('Inertia')
+    plt.title('Inertia vs Number of Clusters')
+    plt.show()

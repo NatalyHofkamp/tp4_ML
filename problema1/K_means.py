@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class K_means: 
-    def __init__(self, k=2, tolerance=0.001, max_iter=500):
+    def __init__(self, k=2, tolerance=0.001, max_iter=50):
         self.k = k
         self.max_iterations = max_iter
         self.tolerance = tolerance
@@ -50,37 +50,21 @@ class K_means:
         return self.clusters, self.centroids
 
 
-def plot_clusters(all_clusters):
+def Kmeans_plot_clusters(clusters_data,k):
+    fig, ax = plt.subplots(figsize=(10, 8))
     colors = plt.get_cmap('tab20').colors
+    clusters, centroids = clusters_data['clusters'], clusters_data['centroids']
+    for cluster in clusters:
+        cluster_data = np.array(clusters[cluster])
+        color = colors[cluster % len(colors)]
+        plt.scatter(cluster_data[:, 0], cluster_data[:, 1], color=color,  alpha=0.6)
+        plt.scatter(centroids[cluster][0], centroids[cluster][1], color='k', marker='x', s=100, linewidths=3)
     
-    num_k = len(all_clusters)
-    cols = 4
-    rows = int(np.ceil(num_k / cols))
-    
-    fig, axes = plt.subplots(1, cols, figsize=(20, 5))
-    axes = axes.flatten()  
-    for idx, (k, clusters_data) in enumerate(all_clusters.items()):
-        ax = axes[idx % cols]
-        clusters, centroids = clusters_data['clusters'], clusters_data['centroids']
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title(f'K={k}', fontsize=12)
         
-        for cluster in clusters:
-            cluster_data = np.array(clusters[cluster])
-            color = colors[cluster % len(colors)]
-            ax.scatter(cluster_data[:, 0], cluster_data[:, 1], color=color,  alpha=0.6)
-            ax.scatter(centroids[cluster][0], centroids[cluster][1], color='k', marker='x', s=100, linewidths=3)
-        
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_title(f'K={k}', fontsize=12)
-        
-        if (idx + 1) % cols == 0 or idx == num_k - 1:
-            plt.tight_layout()
-            plt.show()
-            if idx != num_k - 1:
-                fig, axes = plt.subplots(1, cols, figsize=(20, 5))
-                axes = axes.flatten()
-
-def best_K(K_values, inertia_values):
+def Kmeans_inertia(K_values, inertia_values):
     plt.plot(K_values, inertia_values, marker='o')
     plt.xlabel('Number of clusters (K)')
     plt.ylabel('Inertia')
