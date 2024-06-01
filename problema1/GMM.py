@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
-from K_means import K_means  # Asegúrate de que K_means esté correctamente implementado e importado
-from dataset import get_data  # Asegúrate de que get_data esté correctamente implementado e importado
+from K_means import K_means 
 from scipy.stats import multivariate_normal
 
 class GMM:
@@ -11,19 +9,22 @@ class GMM:
         self.max_iter = int(max_iter)
     
     def initialize(self, X):
+        """
+        Initialize GMM parameters.
+        """
         self.n, self.m = X.shape
         # Encontrar los clusters y centroides usando K-means
         kmeans = K_means(self.k,0.001,20)
         self.clusters, self.centroids = kmeans.set_clusters(X)
 
-        # La media de cada gaussiana son los centroides de k-means
         self.mu = self.centroids
-        # La probabilidad de cada gaussiana (normalizada)
         self.pi = np.array([len(self.clusters[i]) for i in range(self.k)]) / len(X)
-        # La matriz de covarianza de cada gaussiana
         self.sigma = [np.cov(np.array(self.clusters[i]).T) if len(self.clusters[i]) > 0 else np.eye(self.m) for i in range(self.k)]
         
     def E_step(self, X):
+        """
+        Perform the expectation step (E-step) of the EM algorithm.
+        """
         N = len(X)
         responsibilities = np.zeros((N, self.k))
         for point in range(N):
@@ -38,6 +39,9 @@ class GMM:
         return responsibilities
 
     def M_step(self, X):
+        """
+        Perform the maximization step (M-step) of the EM algorithm.
+        """
         new_mu = np.zeros((self.k, self.m))
         new_sigma = np.zeros((self.k, self.m, self.m))
         new_pi = np.zeros(self.k)
@@ -50,6 +54,9 @@ class GMM:
         return new_mu, new_sigma, new_pi
 
     def check_loglikelihood(self, X, log_likelihoods, tol):
+        """
+        Check convergence based on log-likelihood.
+        """
         log_likelihood = np.sum(np.log(np.sum([self.pi[k] * multivariate_normal.pdf(X, self.mu[k], self.sigma[k]) for k in range(self.k)], axis=0)))
         log_likelihoods.append(log_likelihood)
         if len(log_likelihoods) > 1 and abs(log_likelihood - log_likelihoods[-2]) < tol:
@@ -57,6 +64,9 @@ class GMM:
         return False
 
     def Train(self, X, max_iters=100, tol=1e-3):
+        """
+        Train the GMM model using the EM algorithm.
+        """
         self.initialize(X)
         log_likelihoods = []
         for _ in range(max_iters):
@@ -67,6 +77,9 @@ class GMM:
         return log_likelihoods
     
     def set_clusters(self, X):
+        """
+        Assign data points to clusters based on responsibilities.
+        """
         cluster_assignments = np.argmax(self.responsibilities, axis=1)
         clusters = {i: [] for i in range(self.k)}
         for idx, cluster in enumerate(cluster_assignments):

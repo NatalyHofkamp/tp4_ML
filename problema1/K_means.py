@@ -10,13 +10,22 @@ class K_means:
         self.clusters = {}
 
     def euclidean_distance(self, x_1, x_2):
+        """
+        Calculate the Euclidean distance between two points.
+        """
         return np.linalg.norm(x_1 - x_2)
 
     def choose_cluster(self, x_new):
+        """
+        Assign a data point to its nearest centroid.
+        """
         distances = [self.euclidean_distance(x_new, self.centroids[centroid]) for centroid in self.centroids]
         return distances.index(min(distances))
 
     def inertia(self, data):
+        """
+        Calculate the inertia of the clusters.
+        """
         total_inertia = 0
         for cluster in self.clusters:
             for x in self.clusters[cluster]:
@@ -24,6 +33,9 @@ class K_means:
         return total_inertia
 
     def set_clusters(self, data):
+        """
+        Assign data points to clusters and update centroids.
+        """
         self.clusters = {i: [] for i in range(self.k)}
         indices = np.random.choice(len(data), self.k, replace=False)
         for i in range(self.k):
@@ -51,6 +63,9 @@ class K_means:
 
 
 def Kmeans_plot_clusters(clusters_data,k):
+    """
+    Plot the clusters and centroids.
+    """
     fig, ax = plt.subplots(figsize=(10, 8))
     colors = plt.get_cmap('tab20').colors
     clusters, centroids = clusters_data['clusters'], clusters_data['centroids']
@@ -65,6 +80,9 @@ def Kmeans_plot_clusters(clusters_data,k):
     plt.title(f'K={k}', fontsize=12)
         
 def Kmeans_inertia(K_values, inertia_values):
+    """
+    Plot inertia values for different numbers of clusters.
+    """
     plt.plot(K_values, inertia_values, marker='o')
     plt.xlabel('Number of clusters (K)')
     plt.ylabel('Inertia')
